@@ -1,0 +1,366 @@
+{
+  "info": {
+    "name": "Zepto API",
+    "description": "Tests for the Zepto Spring Boot API.\n\nRun the whole collection in order against a freshly started app: placing orders consumes in-memory stock, and the expected totals/partners assume the seed data from DataInitializer.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8082"
+    }
+  ],
+  "item": [
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "List products near user (1,1)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/products?x=1&y=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "x",
+                  "value": "1"
+                  },
+                {
+                  "key": "y",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns all 4 seeded SKUs', () => {",
+                  "    const skus = pm.response.json().map(p => p.sku).sort();",
+                  "    pm.expect(skus).to.eql([101, 102, 103, 201]);",
+                  "});",
+                  "pm.test('Each product has sku, name, price', () => {",
+                  "    pm.response.json().forEach(p => pm.expect(p).to.have.all.keys('sku', 'name', 'price'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List products far from any store",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/products?x=100&y=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "x",
+                  "value": "100"
+                },
+                {
+                  "key": "y",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns empty list', () => pm.expect(pm.response.json()).to.eql([]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List products missing query params",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Place order split across stores",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userName\": \"Aditya\",\n  \"x\": 1.0,\n  \"y\": 1.0,\n  \"items\": [\n    { \"sku\": 101, \"quantity\": 4 },\n    { \"sku\": 102, \"quantity\": 3 },\n    { \"sku\": 103, \"quantity\": 2 }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const order = pm.response.json();",
+                  "pm.test('Total is 210', () => pm.expect(order.totalAmount).to.eql(210));",
+                  "pm.test('Three delivery partners assigned', () => {",
+                  "    pm.expect(order.deliveryPartners).to.eql(['Partner1', 'Partner2', 'Partner3']);",
+                  "});",
+                  "pm.test('All requested quantities fulfilled', () => {",
+                  "    const qty = {};",
+                  "    order.items.forEach(i => qty[i.sku] = (qty[i.sku] || 0) + i.quantity);",
+                  "    pm.expect(qty).to.eql({ 101: 4, 102: 3, 103: 2 });",
+                  "});",
+                  "pm.collectionVariables.set('splitOrderId', order.orderId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Place order from single store",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userName\": \"Riya\",\n  \"x\": 4.0,\n  \"y\": 1.0,\n  \"items\": [\n    { \"sku\": 103, \"quantity\": 2 }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const order = pm.response.json();",
+                  "pm.test('Single delivery partner', () => pm.expect(order.deliveryPartners).to.eql(['Partner1']));",
+                  "pm.test('Total is 100', () => pm.expect(order.totalAmount).to.eql(100));",
+                  "pm.collectionVariables.set('singleOrderId', order.orderId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Place order with no store in range",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userName\": \"Far\",\n  \"x\": 100.0,\n  \"y\": 100.0,\n  \"items\": [\n    { \"sku\": 101, \"quantity\": 1 }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Place order with empty items",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userName\": \"Empty\",\n  \"x\": 1.0,\n  \"y\": 1.0,\n  \"items\": []\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Place order with zero quantity",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userName\": \"Zero\",\n  \"x\": 1.0,\n  \"y\": 1.0,\n  \"items\": [\n    { \"sku\": 101, \"quantity\": 0 }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List all orders",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Contains the orders placed above', () => {",
+                  "    const ids = pm.response.json().map(o => o.orderId);",
+                  "    pm.expect(ids).to.include(pm.collectionVariables.get('splitOrderId'));",
+                  "    pm.expect(ids).to.include(pm.collectionVariables.get('singleOrderId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
